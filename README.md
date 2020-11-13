@@ -1,2 +1,9 @@
 # cl-swimmingpool
-A simple library for concurrent programming through the use of a thread pool
+### _Your Name <your.name@example.com>_
+
+This is a project to do ... something.
+
+## License
+
+Specify license here
+
