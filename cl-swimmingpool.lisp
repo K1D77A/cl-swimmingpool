@@ -2,6 +2,14 @@
 
 (in-package #:cl-swimmingpool)
 
+(define-condition in-progress ()
+  ())
+
+(define-condition no-value-for-key ()
+  ((%key
+    :accessor key
+    :initarg :key)))
+
 (defclass swimming-pool ()
   ((%thread-count
     :accessor thread-count
@@ -25,8 +33,8 @@
    (%runningp
     :accessor runningp
     :initform nil)
-   (%evaluation-value
-    :accessor evaluation-value
+   (%evaluation-values
+    :accessor evaluation-values
     :initform nil)
    (%function-to-execute
     :accessor function-to-execute
@@ -37,6 +45,22 @@
   (let ((t-o (make-instance 'swimmer)))
     (setf (thread t-o) (bt:make-thread (lambda () (wait-for-function t-o))))
     t-o))
+
+(defclass armband ()
+  ((%swimmer
+    :accessor swimmer
+    :initarg :swimmer)
+   (%unique-id
+    :accessor id
+    :initarg :id)
+   (%entry-time
+    :accessor entry-time
+    :initform (get-universal-time))
+   (%exit-time
+    :accessor exit-time)))
+
+(defun make-armband (swimmer id)
+  (make-instance 'armband :swimmer swimmer :id id))
 
 ;;;we want a threadpool where you can (dive <lambda>) and the lambda is placed into a
 ;;;waiting swimmer where the function is passed to the thread, executed and the
@@ -60,15 +84,19 @@
 
 (defmethod pass-function ((swimmer swimmer) (function function))
   (execute-when ((not (runningp swimmer)))
-    (setf (function-to-execute swimmer) function)))
+    (setf (function-to-execute swimmer) function)
+    (let ((sym (gensym)))
+      (setf (evaluation-values swimmer)
+            (append (evaluation-values swimmer) (list sym))))))
 
-(defmethod get-return-value ((swimmer swimmer))
+(defmethod get-return-value ((swimmer swimmer) id)
   "Grabs the evaluation-value from SWIMMER if there is one."
-  (let ((val (evaluation-value swimmer)))
-    (when val
-      (setf (evaluation-value swimmer) nil);reset the val to nil
-      ;;resetting the value would allow for some form of blocking to wait for a value
-      val)))
+  (let* ((values (evaluation-values swimmer))
+         (value (second (assoc id values :test #'eq))))
+    (if value
+        (setf (evaluation-values swimmer) (remove value values :test #'tree-equal))
+        ;;reset the val to nil
+        (error 'no-value-for-key :key id))))
 
 ;;;might be a good idea to have a flag to say that the value has been collected.
 
@@ -79,7 +107,7 @@ used by the thread."
   (execute-when-and-keep-going ((function-to-execute swimmer))
     (execute-function swimmer)))
 
-(defmethod bleach ((swimmer swimmer))
+(defmethod drown ((swimmer swimmer))
   "Currently just stops the thread within SWIMMER and sets the thread object to 
 no longer running."
   (bt:destroy-thread (thread swimmer))
@@ -89,7 +117,6 @@ no longer running."
 ;;;but for later, its also possible to add in the ability to block new evaluations until
 ;;;values have been grabbed by 'get-out'
 
-
 (defmacro map-threads ((pool) function)
   `(maphash ,function (thread-pool ,pool)))
 
@@ -98,14 +125,14 @@ no longer running."
   (map-threads (swimming-pool) 
                (lambda (key val)
                  (declare (ignore key))
-                 (bleach val))))
+                 (drown val))))
 
 ;;;do I want this to block or not? What if there are no threads ready to go? Do we keep
 ;;;checking or do we just error? idk
 (defmethod dive ((swimming-pool swimming-pool) (function function))
   "Adds a function to a swimmer that is ready to receive it, returns a symbol which
 is used to get the final value of the function once it is evaluated in a thread."
-  (let ((keyword nil)
+  (let ((swimmer)
         (done nil));;this is less than efficient but pools are quite small so its
     ;;trivial to map over them
     (map-threads (swimming-pool)
@@ -113,10 +140,10 @@ is used to get the final value of the function once it is evaluated in a thread.
                    (unless (or (runningp swimmer) done)
                      (pass-function swimmer function)
                      (setf done t)
-                     (setf keyword key))))
+                     (setf swimmer (make-armband swimmer)))))
     (if done
-        keyword
+        swimmer
         nil)))
 
-(defmethod get-out ((swimming-pool swimming-pool) symbol)
-  (get-return-value (gethash symbol (thread-pool swimming-pool))))
+(defmethod get-out ((armband armband))
+  (get-return-value (swimmer armband) (id armband)))
