@@ -10,4 +10,5 @@
                #:trivial-backtrace)
   :serial t
   :components ((:file "package")
+               (:file "classes&conditions")
                (:file "cl-swimmingpool")))
