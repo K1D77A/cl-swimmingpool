@@ -30,14 +30,8 @@
 (defclass swimmer ()
   ((%thread
     :accessor thread)
-   (%runningp
-    :accessor runningp
-    :initform nil)
-   (%evaluation-values
-    :accessor evaluation-values
-    :initform nil)
-   (%function-to-execute
-    :accessor function-to-execute
+   (%floation-devices
+    :accessor floatation-devices
     :initform nil))
   (:metaclass metalock:metalock));;no need to worry about locks now
 
@@ -46,21 +40,30 @@
     (setf (thread t-o) (bt:make-thread (lambda () (wait-for-function t-o))))
     t-o))
 
-(defclass armband ()
+(defclass plastic-float ()
   ((%swimmer
     :accessor swimmer
     :initarg :swimmer)
    (%unique-id
     :accessor id
     :initarg :id)
-   (%entry-time
-    :accessor entry-time
-    :initform (get-universal-time))
-   (%exit-time
-    :accessor exit-time)))
+   (%runningp
+    :accessor runningp
+    :initform nil)
+   (%result-read-p
+    :accessor result-read-p
+    :initform nil)
+   (%function-to-execute
+    :accessor function-to-execute)
+   (%result
+    :accessor result)
+   (%start-time
+    :accessor start-time)
+   (%end-time
+    :accessor end-time)))
 
-(defun make-armband (swimmer id)
-  (make-instance 'armband :swimmer swimmer :id id))
+(defun make-plastic-float (swimmer id)
+  (make-instance 'plastic-float :swimmer swimmer :id id))
 
 ;;;we want a threadpool where you can (dive <lambda>) and the lambda is placed into a
 ;;;waiting swimmer where the function is passed to the thread, executed and the
@@ -74,44 +77,60 @@
 (defmacro execute-when-and-keep-going ((when) &body body)
   `(loop :do (execute-when (,when) ,@body)))
 
+(defmethod ready-to-execute-p ((floatation plastic-float))
+  (and (not (runningp floatation))
+       (slot-unbound 'plastic-float floatation '%result)))
+
+
+
+(defmethod execute-function ((floatation plastic-float))
+  (with-accessors ((start-time start-time)
+                   (end-time end-time)
+                   (runningp runningp)
+                   (result result)
+                   (function-to-execute function-to-execute))
+      floatation
+    (setf runningp t)
+    (setf start-time (get-universal-time))
+    ;;still need something here to make sure the thread doesnt get yeeted
+    (setf result (funcall function-to-execute))
+    (setf end-time (get-universal-time))
+    (setf runningp nil)))
+
 (defmethod execute-function ((swimmer swimmer))
-  (setf (runningp swimmer) t)
-  ;;will need something here to make sure that the thread hasn't fuckin died
-  (setf (evaluation-value swimmer)
-        (funcall (function-to-execute swimmer)))
-  (setf (function-to-execute swimmer) nil)
-  (setf (runningp swimmer) nil))
+  (execute-when ((not (zerop (length (floatation-devices swimmer)))))
+    (loop :for floatation :in (floatation-devices swimmer)
+          :if (ready-to-execute-p floatation)
+            :do (execute-function floatation)
+                (return floatation)
+          :else :do (return nil))))
 
-(defmethod pass-function ((swimmer swimmer) (function function))
-  (execute-when ((not (runningp swimmer)))
-    (setf (function-to-execute swimmer) function)
-    (let ((sym (gensym)))
-      (setf (evaluation-values swimmer)
-            (append (evaluation-values swimmer) (list sym))))))
-
-(defmethod get-return-value ((swimmer swimmer) id)
-  "Grabs the evaluation-value from SWIMMER if there is one."
-  (let* ((values (evaluation-values swimmer))
-         (value (second (assoc id values :test #'eq))))
-    (if value
-        (setf (evaluation-values swimmer) (remove value values :test #'tree-equal))
-        ;;reset the val to nil
-        (error 'no-value-for-key :key id))))
-
-;;;might be a good idea to have a flag to say that the value has been collected.
+(defmethod pass-function ((swimmer swimmer) (plastic-float plastic-float))
+  (setf (floatation-devices swimmer)
+        (append plastic-float (floatation-devices swimmer))))
 
 (defmethod wait-for-function ((swimmer swimmer))
   "Sits and waits until there is a function for the SWIMMER to evaluate, when one 
 is set 'execute-function' is called and this goes back to waiting. This is designed to be
 used by the thread."
-  (execute-when-and-keep-going ((function-to-execute swimmer))
-    (execute-function swimmer)))
+  (execute-when-and-keep-going ((floatation-devices swimmer))
+    (let ((executed (execute-function swimmer)))
+      (when (and executed (result-read-p executed))
+        (setf (floatation-devices swimmer)
+              (remove executed (floatation-devices swimmer)))))))
+
+(defmethod get-out ((plastic-float plastic-float))
+  (with-accessors ((result result)
+                   (result-read-p result-read-p))
+      plastic-float
+    (setf result-read-p t)
+    result))
 
 (defmethod drown ((swimmer swimmer))
   "Currently just stops the thread within SWIMMER and sets the thread object to 
 no longer running."
-  (bt:destroy-thread (thread swimmer))
-  (setf (runningp swimmer) nil))
+  (bt:destroy-thread (thread swimmer)))
+
 
 ;;;okay this is working as planned although there is no recourse for when a thread dies
 ;;;but for later, its also possible to add in the ability to block new evaluations until
@@ -130,20 +149,20 @@ no longer running."
 ;;;do I want this to block or not? What if there are no threads ready to go? Do we keep
 ;;;checking or do we just error? idk
 (defmethod dive ((swimming-pool swimming-pool) (function function))
-  "Adds a function to a swimmer that is ready to receive it, returns a symbol which
+"Adds a function to a swimmer that is ready to receive it, returns a symbol which
 is used to get the final value of the function once it is evaluated in a thread."
-  (let ((swimmer)
-        (done nil));;this is less than efficient but pools are quite small so its
-    ;;trivial to map over them
-    (map-threads (swimming-pool)
-                 (lambda (key swimmer)
-                   (unless (or (runningp swimmer) done)
-                     (pass-function swimmer function)
+(let ((plastic-float)
+      (done nil));;this is less than efficient but pools are quite small so its
+  ;;trivial to map over them
+  (map-threads (swimming-pool)
+               (lambda (key swimmer)
+                 (unless (or (runningp swimmer) done)
+                   (let ((sym (pass-function swimmer function)))
                      (setf done t)
-                     (setf swimmer (make-armband swimmer)))))
-    (if done
-        swimmer
-        nil)))
+                     (setf plastic-float (make-plastic-float swimmer sym))))))
+  (if done
+      plastic-float
+      nil)))
 
-(defmethod get-out ((armband armband))
-  (get-return-value (swimmer armband) (id armband)))
+
+
