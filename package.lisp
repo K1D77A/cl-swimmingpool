@@ -11,7 +11,7 @@
            #:bleach
            #:drown
            #:swimmer-has-or-is-trying-to-shutdown
-
+           #:*sleep-time*
            ;;plastic-float accessors
            #:backtrace
            #:end-time

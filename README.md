@@ -2,7 +2,7 @@
 
 This library is a simple implementation of a thread pool.
 The purpose is to allow the user to be able to execute tasks concurrently without much
-much thought. This libary implements a simple thread pool where each thread has a list of
+thought. This libary implements a simple thread pool where each thread has a list of
 tasks it has to execute as they are added to the pool. As a task is executed the result is
 stored and simply waits for the user to retrieve the results, once retreived the task is
 removed from the pool. I decided I would make the library swimming pool themed.
@@ -14,6 +14,20 @@ These are passed to the swimmer where the swimmer then executes the functions st
 within. The floats store their start and end time, part of the stacktrace and the condition
 in the event an unhandled condition is signalled.
 
+A few notes:
+* Plastic floats are always added to the swimmer with the smallest number of floats.
+* Floats are not removed from a swimmer until you use the function (get-out ..), even
+if (get-out ..) signals a condition the float will be removed from the swimmer, however
+you will still be able to retrieve your result/backtrace etc using the accessors listed
+in package.lisp
+* If you use (bleach <pool>)  without the dirty flag you have to wait for all of your
+swimmers to finish executing before they will shutdown gracefully, if you want to
+bleach the pool instantly set dirty to non nil and it will use bt:destroy-thread.
+* You can stop individual swimmers using (drown <swimmer>) the same rules regarding the
+dirty flag apply.
+* When there is no work to be done the swimmers just sit and wait before checking if
+there is work to be done, you can increase/decrease this wait time by setting the variable
+*sleep-time* to whatever you want, currently it is 0.001.
 
 ```lisp
 ;make-swimming-pool
