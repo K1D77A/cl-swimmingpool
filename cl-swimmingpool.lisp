@@ -6,11 +6,8 @@
 
 (define-condition in-progress ()
   ())
-
-(define-condition no-value-for-key ()
-  ((%key
-    :accessor key
-    :initarg :key)))
+(define-condition function-execution-errored ()
+  ())
 
 (defclass swimming-pool ()
   ((%swimmers-count
@@ -54,6 +51,11 @@
    (%runningp
     :accessor runningp
     :initform nil)
+   (%erroredp
+    :accessor erroredp
+    :initform nil)
+   (%backtrace
+    :accessor backtrace)
    (%result-read-p
     :accessor result-read-p
     :initform nil)
@@ -94,15 +96,22 @@
                    (end-time end-time)
                    (runningp runningp)
                    (result result)
-                   (function-to-execute function-to-execute))
+                   (function-to-execute function-to-execute)
+                   (backtrace backtrace)
+                   (erroredp erroredp))
       floatation
     (setf runningp t)
     (setf start-time (get-universal-time))
     ;;still need something here to make sure the thread doesnt get yeeted
-    (let ((res (funcall function-to-execute)))
-      (setf result res))
-    (setf end-time (get-universal-time))
-    (setf runningp nil)))
+    (let ((res
+            (handler-case (funcall function-to-execute)
+              (condition (c)
+                (setf backtrace (trivial-backtrace:print-backtrace c :output nil))
+                (setf erroredp t)
+                c))))
+      (setf result res)
+      (setf end-time (get-universal-time))
+      (setf runningp nil))))
 
 (defmethod execute-function ((swimmer swimmer))
   (let ((to-execute (remove-if-not #'ready-to-execute-p (floatation-devices swimmer))))
@@ -137,8 +146,16 @@ results read."
   (with-accessors ((result result)
                    (result-read-p result-read-p))
       plastic-float
-    (setf result-read-p t)
-    result))
+    (if (and (slot-boundp plastic-float '%result)
+             (not (erroredp plastic-float))
+             (not (result-read-p plastic-float)))
+        (progn (setf result-read-p t)
+               result)
+        (if (erroredp plastic-float)
+            (progn 
+              (setf result-read-p t)
+              (error 'function-execution-errored))
+            (error 'in-progress)))))
 
 (defmethod drown ((swimmer swimmer))
   "Currently just stops the thread within SWIMMER and sets the thread object to 

@@ -4,9 +4,10 @@
   :description "A trivial thread pooling library that allows you to queue work to be done"
   :author "K1D77A"
   :license  "MIT"
-  :version "0.0.1"
+  :version "0.0.2"
   :depends-on (#:metalock
-               #:alexandria)
+               #:alexandria
+               #:trivial-backtrace)
   :serial t
   :components ((:file "package")
                (:file "cl-swimmingpool")))

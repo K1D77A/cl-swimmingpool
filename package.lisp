@@ -5,4 +5,6 @@
   (:nicknames #:swim)
   (:export #:dive
            #:get-out
-           #:make-swimming-pool))
+           #:make-swimming-pool
+           #:in-progress
+           #:function-execution-errored))
