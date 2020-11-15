@@ -2,4 +2,7 @@
 
 (defpackage #:cl-swimmingpool
   (:use #:cl)
-  (:nicknames #:swim))
+  (:nicknames #:swim)
+  (:export #:dive
+           #:get-out
+           #:make-swimming-pool))

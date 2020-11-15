@@ -11,7 +11,17 @@ todo
 * restart/reset broken swimmers
 * clean shutdown of swimmers
 
-There are two functions currently, dive (add a function) and get-out (grab the result). 
+```lisp
+;make-swimming-pool
+SWIM> (make-swimming-pool 10)
+#<SWIMMING-POOL {1004ED76A3}>
+;dive
+SWIM> (dive * (lambda () (sleep 10)(print "abc")))
+#<PLASTIC-FLOAT {1003622D83}>
+;get-out
+SWIM> (get-out *)
+"abc"
+```
 
 ## License
 

@@ -5,7 +5,8 @@
   :author "K1D77A"
   :license  "MIT"
   :version "0.0.1"
-  :depends-on (#:metalock)
+  :depends-on (#:metalock
+               #:alexandria)
   :serial t
   :components ((:file "package")
                (:file "cl-swimmingpool")))
