@@ -1,15 +1,19 @@
 # cl-swimmingpool
 
-This library is a simple implementation of a thread poolg (swimming pool) that allows
-the user to send functions to a pool (swimmer) to be executed and then grab the result after the task has been evaluated.
+This library is a simple implementation of a thread pool.
+The purpose is to allow the user to be able to execute tasks concurrently without much
+much thought. This libary implements a simple thread pool where each thread has a list of
+tasks it has to execute as they are added to the pool. As a task is executed the result is
+stored and simply waits for the user to retrieve the results, once retreived the task is
+removed from the pool. I decided I would make the library swimming pool themed.
 
+* Swimming pool - This is the primary thread pool which contains swimmers.
+* Swimmer - A swimmer is a thread and a list of plastic-floats.
+* Plastic float - A plastic float is the name for tasks the user wants to have executed.
+These are passed to the swimmer where the swimmer then executes the functions stored
+within. The floats store their start and end time, part of the stacktrace and the condition
+in the event an unhandled condition is signalled.
 
-todo
-* queue for each thread - done
-* add tasks to the shortest queue - done 
-* record error output for an armband - done
-* restart/reset broken swimmers 
-* clean shutdown of swimmers - done (including a dirty shutdown as well)
 
 ```lisp
 ;make-swimming-pool
